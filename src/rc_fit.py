@@ -7,7 +7,7 @@ Whole-house, single-node energy balance on hourly data, night hours only (no sol
   T_in      = mean of main-floor and upstairs sensors (basement unmeasured -> its losses land in the intercept)
   dT_in/dt  = centred difference of hourly means (K/h)
   G_u       = unknown constant gains/losses (people, DHW tank, ground, party wall offsets)
-The identical regression is run on EnergyPlus v0.4.1 output so measured and model UA/C compare like for like.
+The identical regression is run on EnergyPlus output (run folders given as arguments) so measured and model UA/C compare like for like.
 UA here is the effective heat-loss coefficient seen by the above-grade sensors (conduction + infiltration at mean wind).
 
     python3 src/rc_fit.py [cal_run_dir fall_run_dir]   # optional: E+ run folders (eplusout.sql) from calib.run_case
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     for case in CASES:
         out[f"measured {case}"] = fit(measured_frame(case))
         if case in runs:
-            out[f"E+ v0.4.1 {case}"] = fit(model_frame(case, runs[case]))
+            out[f"E+ {Path(runs[case]).name} {case}"] = fit(model_frame(case, runs[case]))
     for k, v in out.items():
         print(f"{k:18s}", {kk: v[kk] for kk in ["n_nights", "r2", "UA_W_K", "UA_90", "Kw_W_K_per_ms", "C_MJ_K", "C_90", "tau_h", "Gu_W"]})
     (ROOT / "runs").mkdir(exist_ok=True)

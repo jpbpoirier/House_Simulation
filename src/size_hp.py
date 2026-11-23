@@ -1,4 +1,4 @@
-"""Design heating load with the calibrated v0.4 model: ideal loads, damper closed, design day(s)."""
+"""Design heating load with the current calibrated model (PARAMS in build_model.py; ccashp-sizing.md results used v0.4): ideal loads, damper closed, design day(s)."""
 import os, sys, json, copy, subprocess, sqlite3, platform
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
@@ -89,6 +89,6 @@ def hourly(sql, var):
 
 
 if __name__ == "__main__":
-    # v0.4, damper closed, 21 C above grade / 17 C basement, no internal or solar gains
+    # damper closed, 21 C above grade / 17 C basement, no internal or solar gains
     for t in (-25, -15, 0):
         print(t, "C:", round(design_load(tdesign=t)), "W")
