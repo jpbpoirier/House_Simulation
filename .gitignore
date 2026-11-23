@@ -1,0 +1,13 @@
+# simulation outputs (regenerated)
+runs/
+model/house*.epJSON
+model/house*.idf
+*.sql
+in.idf
+# private source documents and bills stay on the Mac
+data/raw/
+# EnergyPlus install (cloud) and Python caches
+ep/
+__pycache__/
+*.pyc
+.DS_Store
