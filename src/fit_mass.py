@@ -30,6 +30,9 @@ FREE = {"air_cap_mult": (1.0, 100.0), "ela_mult": (0.6, 1.4), "env_r_mult": (0.9
 # x0 as used for fit6 (screen.BASE was v0.4.1 then; it is now v0.5); air capacitance started at x40 (scan: C 16 MJ/K)
 X0 = {"air_cap_mult": 40.0, "ela_mult": 1.0, "env_r_mult": 1.0, "gains_fraction_lost": 0.123,
       "win_shgc_new": 0.353, "ac_cap_mult": 1.0, "t_neighbour": 19.48}
+# fit7 (2026-11-23, fan-mode schedule): start from the v0.5 values (screen.BASE = v0.5 PARAMS, so multipliers = 1)
+X0_V05 = {"air_cap_mult": 51.5, "ela_mult": 1.0, "env_r_mult": 1.0, "gains_fraction_lost": 0.237,
+          "win_shgc_new": 0.353, "ac_cap_mult": 1.0, "t_neighbour": 19.33}
 
 
 def dyn_terms(run_dir):
@@ -48,6 +51,7 @@ def dyn_terms(run_dir):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--tag", default="fit5"); ap.add_argument("--maxfev", type=int, default=150)
+    ap.add_argument("--x0", choices=["fit6", "v05"], default="fit6")
     A = ap.parse_args()
     names = list(FREE); lo = np.array([FREE[n][0] for n in names]); hi = np.array([FREE[n][1] for n in names])
     od = ROOT / "runs/calib" / A.tag; od.mkdir(parents=True, exist_ok=True)
@@ -68,7 +72,8 @@ def main():
               {k: round(v, 3) for k, v in x.items()}, flush=True)
         return J
 
-    u0 = (np.array([X0[k] for k in names]) - lo) / (hi - lo)
+    x0 = X0_V05 if A.x0 == "v05" else X0
+    u0 = (np.array([x0[k] for k in names]) - lo) / (hi - lo)
     r = minimize(f, u0, method="Powell", bounds=[(0, 1)] * len(names), options=dict(maxfev=A.maxfev, xtol=0.02, ftol=1e-3))
     print("done", r.fun)
 

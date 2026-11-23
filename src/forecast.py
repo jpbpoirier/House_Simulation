@@ -106,16 +106,20 @@ def typical_gains():
     """Mean plug gains, dryer W and dryer-on fraction by (weekend?, hour LST) over the latest 8 weeks (mean keeps energy)."""
     e = pd.read_csv(C / "ecobee_5min.csv", index_col=0, parse_dates=True)
     hh = pd.read_csv(C / "hydro_hourly.csv", index_col=0, parse_dates=True).kwh
-    g = split_loads(e, hh)[["gains_W", "dryer_W", "dryer_on"]].dropna()
+    L = split_loads(e, hh)
+    g = L[["gains_W", "dryer_W", "dryer_on"]].dropna()
     g = g.loc[g.index.max() - pd.Timedelta(days=56):]
-    return g.groupby([g.index.dayofweek >= 5, g.index.hour]).mean(), (g.index.min(), g.index.max())
+    # blower mode: continuous ("fan on") if the fan ran fan-only for most hours of the last 14 days
+    f = L.fanonly_h.loc[L.index.max() - pd.Timedelta(days=14):]
+    fan_on = float((f > 0.5).mean() > 0.5)
+    return g.groupby([g.index.dayofweek >= 5, g.index.hour]).mean(), (g.index.min(), g.index.max()), fan_on
 
 
 def forecast_schedules(window_start, window_end):
     """8760 rows by hour-of-year for the run year(s); each day-of-year is mapped to its date in the window."""
     base = pd.read_csv(C / "sched_8760.csv", index_col=0, parse_dates=True)
     w_up = base.w_up.groupby(base.index.hour).median()
-    gains, span = typical_gains()
+    gains, span, fan_on = typical_gains()
     prof = {7: .06, 8: .03, 12: .015, 18: .04, 19: .04, 21: .017}
     days = pd.date_range(window_start, window_end, freq="D")
     by_md = {(d.month, d.day): d for d in days}
@@ -129,9 +133,9 @@ def forecast_schedules(window_start, window_end):
         k = (ts.dayofweek >= 5, hr)
         gw, dw, don = gains.loc[k].values if k in gains.index else (400.0, 0.0, 0.0)
         # fireplace damper closed from 2026-11-22 (J-P) -> 0
-        rows.append((t, heat, cool, gw, occ, w_up.get(hr, 0.5), prof.get(hr, 0.0), dw, don, 0.0))
+        rows.append((t, heat, cool, gw, occ, w_up.get(hr, 0.5), prof.get(hr, 0.0), dw, don, 0.0, fan_on))
     s = pd.DataFrame(rows, columns=["hour_lst", "sp_heat", "sp_cool", "gains_W", "occ", "w_up", "dhw",
-                                    "dryer_W", "dryer_on", "damper"]).set_index("hour_lst")
+                                    "dryer_W", "dryer_on", "damper", "fan_on"]).set_index("hour_lst")
     s.round(4).to_csv(C / "sched_forecast.csv")
     return span
 
