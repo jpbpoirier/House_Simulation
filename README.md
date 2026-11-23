@@ -8,7 +8,7 @@ Dashboard: https://claude.ai/artifact/7qiLdwotc4fJCvyTDXCc14 · Model inputs, re
 | Folder | Contents |
 |---|---|
 | `model/build_model.py` | epJSON generator; all calibrated knobs in `PARAMS` (model v0.4.1) |
-| `src/` | ingest, schedules, weather (EPW), run, results, calibration (`calib.py`, `screen.py`, `fit.py`), forecast, tariffs, heat-pump sizing |
+| `src/` | ingest, schedules, weather (EPW), run, results, calibration (`calib.py`, `screen.py`, `fit.py`), benchmarks (`cpm.py` change-point model, `rc_fit.py` night-time UA/C), forecast, tariffs, heat-pump sizing |
 | `data/clean/` | cleaned ecobee (5-min), Hydro Ottawa (hourly/daily), Enbridge reads, water reads, Schedule:File inputs. Local standard time (EST) throughout |
 | `data/manual/` | manual gas meter readings |
 | `weather/` | ERA5/ECCC observations, actual-weather EPWs, CWEC 2020 |
@@ -22,6 +22,8 @@ Mac (EnergyPlus at `/Applications/EnergyPlus-26-2-0`):
 ```
 python3 src/forecast.py              # 10-day forecast -> dashboard/forecast*.json
 python3 src/calib.py base            # calibration score card for current PARAMS
+python3 src/cpm.py [cal_run fall_run]    # change-point benchmark (optionally vs E+ run folders)
+python3 src/rc_fit.py [cal_run fall_run] # night-time UA / C regression, measured (and E+)
 python3 src/ingest.py                # data/raw -> data/clean (after new exports)
 python3 src/prep_schedules.py        # data/clean -> sched_8760.csv (add --aug-dec-year 2026 --out sched_fall2026.csv)
 ```

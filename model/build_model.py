@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PARAMS = dict(
     # envelope (effective RSI incl. films, EnerGuide 2024)
     # v0.4 calibration (2026-11-22, src/fit.py fit3): walls + ceiling x1.144 of EnerGuide effective RSI
-    rsi_wall_f1=2.65 * 1.144, rsi_wall_f2=2.44 * 1.144, rsi_wall_garage=2.29, rsi_ceiling=5.33 * 1.144,
+    # v0.5 (2026-11-23, src/fit_mass.py fit6, with air capacitance free): x1.059
+    rsi_wall_f1=2.65 * 1.059, rsi_wall_f2=2.44 * 1.059, rsi_wall_garage=2.29, rsi_ceiling=5.33 * 1.059,
     rsi_exposed_floor=3.93, rsi_header=2.80, rsi_bsmt_int_ins=2.11,
     bsmt_ins_depth_below_grade=1.567,        # fit at its bound (full height); J-P says ~3 ft (0.9 m) -> stands in for low basement losses
     win_u_new=2.05, win_shgc_new=0.353, win_u_side=3.0, win_shgc_side=0.60,
@@ -26,11 +27,11 @@ PARAMS = dict(
     # -> LBL ELA @4 Pa, Cd 1: 668.5 * 0.611 * 0.4**0.15 = 356 cm2 (v0.4 omitted the Cd factor).
     # One multiplier on all leakage (Sherman-Grimsrud with typical shelter overpredicts for this semi).
     ela_house_cm2=668.5 * 0.611 * (4 / 10) ** (0.65 - 0.5),
-    infil_mult=0.472,            # v0.4 winter total (239 cm2 with damper open) / (356 + 150)
+    infil_mult=0.396,            # v0.5 fit (v0.4.1: 0.472 = 239 cm2 winter total with damper open / (356 + 150))
     stack_coef=0.000290, wind_coef=0.000231,  # ASHRAE Fundamentals, 2-storey, typical shelter (check)
     # HVAC
     furnace_output_W=37000 / 3.412, furnace_eff=37000 / 39000,   # low fire, rating plate
-    ac_cap_W=0.873 * 1.5 * 3517, ac_cop_gross=3.6, ac_shr=0.75,
+    ac_cap_W=0.854 * 1.5 * 3517, ac_cop_gross=3.6, ac_shr=0.75,
     supply_flow_m3s=0.29, fan_dp_Pa=400, fan_eff=0.55,
     flow_split=dict(Floor1=0.36, Floor2=0.47, Basement=0.17),   # tuned to ecobee upstairs-main gradient (Dec-Feb +1.1 K)
     # DHW
@@ -38,7 +39,7 @@ PARAMS = dict(
     dhw_pilot_W=130, dhw_ua_W_K=3.0,
     dhw_hot_fraction=0.20,      # hot share of household water (City of Ottawa meter, mean 426 L/day -> ~85 L/day hot)
     # internal gains
-    gains_fraction_lost=0.123, gains_split=dict(Floor1=0.45, Floor2=0.30, Basement=0.25),
+    gains_fraction_lost=0.237, gains_split=dict(Floor1=0.45, Floor2=0.30, Basement=0.25),
     people=2,
     thermostat="weighted",   # "weighted": ecobee-style main/upstairs blend via EMS; "floor1": Floor1 only
     attic_ach=2.0, garage_ach=1.0,
@@ -48,8 +49,14 @@ PARAMS = dict(
     dryer_heat_lost=0.85,        # share of dryer electricity leaving with the exhaust
     damper_ela_cm2=150.0,        # fireplace damper open-minus-closed ELA before infil_mult (ASHRAE component table)
     soil_k=0.824, mass_mult=1.0,     # soil k at the fit's lower bound
+    # v0.5: extra thermal mass via internal-mass density (mass_mult scales area, which changes the radiant
+    # enclosure and made results jump non-monotonically; keep mass_mult = 1)
+    mass_dens_mult=1.0,
+    # v0.5: zone air capacitance multiplier on Basement/Floor1/Floor2 (fit6: 51.5). Night RC regression C:
+    # measured 22.8 MJ/K, v0.4.1 4.9, v0.5 19.1 (benchmark-cpm-rc.md)
+    air_cap_mult=51.5,
     # v0.4b: party wall to the neighbour's heated unit (J-P: neighbour keeps ~20 C)
-    t_neighbour=19.48, t_neighbour_bsmt=17.0,
+    t_neighbour=19.33, t_neighbour_bsmt=17.0,
 )
 
 # ---------------------------------------------------------------- geometry
@@ -136,6 +143,13 @@ def build(weather="cwec", p=PARAMS, period=None, sched="sched_8760.csv"):
     add("Site:WaterMainsTemperature", "Site:WaterMainsTemperature 1",
         calculation_method="CorrelationFromWeatherFile")
     add("ZoneAirHeatBalanceAlgorithm", "ZoneAirHeatBalanceAlgorithm 1", algorithm="AnalyticalSolution")
+    if p.get("air_cap_mult", 1.0) != 1.0:
+        # v0.5: lumped contents / fast mass at the air node of the conditioned zones (attic and garage stay at 1).
+        # Smooth stand-in for furniture, contents and surface layers; also absorbs ecobee sensor lag.
+        for z in ["Basement", "Floor1", "Floor2"]:
+            add("ZoneCapacitanceMultiplier:ResearchSpecial", f"Contents {z}", zone_or_zonelist_name=z,
+                temperature_capacity_multiplier=p["air_cap_mult"], humidity_capacity_multiplier=1.0,
+                carbon_dioxide_capacity_multiplier=1.0)
 
     # ------------------------------------------------------------ schedules
     for n, lo, hi in [("Fraction", 0, 1), ("Temperature", -60, 200), ("AnyNumber", None, None),
@@ -183,6 +197,9 @@ def build(weather="cwec", p=PARAMS, period=None, sched="sched_8760.csv"):
     mat("OSB 11mm", 0.011, 0.12, 650, 1210)
     mat("Siding 10mm", 0.010, 0.11, 600, 1300)
     mat("Plywood 19mm", 0.019, 0.12, 540, 1210)
+    # v0.5: internal-mass materials scaled by density, not area (area changes the radiant enclosure: see mass_dens_mult)
+    mat("IM Gypsum 13mm", 0.0127, 0.16, 800 * p.get("mass_dens_mult", 1.0), 1090, "Smooth")
+    mat("IM Plywood 19mm", 0.019, 0.12, 540 * p.get("mass_dens_mult", 1.0), 1210)
     mat("Concrete 200mm", 0.20, 1.40, 2240, 900)
     mat("Concrete 100mm", 0.10, 1.40, 2240, 900)
     mat("Shingles", 0.006, 0.16, 1100, 1260, "Rough")
@@ -244,8 +261,8 @@ def build(weather="cwec", p=PARAMS, period=None, sched="sched_8760.csv"):
     add("Construction", "Gable", outside_layer="Siding 10mm", layer_2="OSB 11mm")
     nomass("Door core", 0.98 - films)
     add("Construction", "Ext Door", outside_layer="Steel skin", layer_2="Door core", layer_3="Steel skin")
-    add("Construction", "Interior Partition", outside_layer="Gypsum 13mm", layer_2="Gypsum 13mm")
-    add("Construction", "Furniture", outside_layer="Plywood 19mm")
+    add("Construction", "Interior Partition", outside_layer="IM Gypsum 13mm", layer_2="IM Gypsum 13mm")
+    add("Construction", "Furniture", outside_layer="IM Plywood 19mm")
     for n, u, sh in [("Win New", p["win_u_new"], p["win_shgc_new"]), ("Win Side", p["win_u_side"], p["win_shgc_side"]),
                      ("Win Bsmt", p["win_u_bsmt"], p["win_shgc_bsmt"])]:
         add("WindowMaterial:SimpleGlazingSystem", n + " glz", u_factor=u, solar_heat_gain_coefficient=sh,
