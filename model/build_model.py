@@ -31,8 +31,17 @@ PARAMS = dict(
     stack_coef=0.000290, wind_coef=0.000231,  # ASHRAE Fundamentals, 2-storey, typical shelter (check)
     # HVAC
     furnace_output_W=37000 / 3.412, furnace_eff=37000 / 39000,   # low fire, rating plate
-    ac_cap_W=0.854 * 1.5 * 3517, ac_cop_gross=3.6, ac_shr=0.75,
-    supply_flow_m3s=0.29, fan_dp_Pa=400, fan_eff=0.55,
+    ac_cap_W=0.939 * 1.5 * 3517,   # v0.6 (2026-11-23): x1.1 of v0.5 (0.854) after adding the fan-on schedule (fan heat)
+    ac_cop_gross=3.6, ac_shr=0.75,
+    # fan power at full flow = flow x dP / eff. 2026-11-23: dP 400 -> 322 Pa gives 170 W, the measured fan-only draw
+    # (hourly regression 0.17 kW [0.14-0.20]); HVACTemplate runs one flow in every mode.
+    supply_flow_m3s=0.29, fan_dp_Pa=322, fan_eff=0.55,
+    # 2026-11-23: blower operating mode from ecobee (Schedule:File column 11: 1 = continuous fan, 0 = cycling).
+    # ecobee shows "fan on" through the cooling/shoulder seasons (1958 fan-only h in the cal year); E+ had it cycling,
+    # so the fan-only electricity (~370 kWh) was removed from plug loads (src/loads.py) but never added back.
+    fan_mode="schedule",         # "schedule" | "cycling"
+    # furnace inducer + controls while firing: hourly regression heat-mode 0.30 kW [0.26-0.33] minus 170 W fan
+    furnace_parasitic_W=130.0,
     flow_split=dict(Floor1=0.36, Floor2=0.47, Basement=0.17),   # tuned to ecobee upstairs-main gradient (Dec-Feb +1.1 K)
     # DHW
     dhw_setpoint_C=55, dhw_cap_W=44000 / 3.412, dhw_eff=0.78,
@@ -172,7 +181,8 @@ def build(weather="cwec", p=PARAMS, period=None, sched="sched_8760.csv"):
     for col, name, lim in [(2, "Heating Setpoint", "Temperature"), (3, "Cooling Setpoint", "Temperature"),
                            (4, "Plug Gains W", "AnyNumber"), (5, "Occupancy", "Fraction"),
                            (6, "Upstairs Weight", "Fraction"), (7, "DHW Draw", "AnyNumber"),
-                           (8, "Dryer W", "AnyNumber"), (9, "Dryer On", "Fraction"), (10, "Damper Open", "Fraction")]:
+                           (8, "Dryer W", "AnyNumber"), (9, "Dryer On", "Fraction"), (10, "Damper Open", "Fraction")] + \
+            ([(11, "Fan Mode", "Fraction")] if p.get("fan_mode", "cycling") == "schedule" else []):
         add("Schedule:File", name, schedule_type_limits_name=lim, file_name=sched_csv, column_number=col,
             rows_to_skip_at_top=1, number_of_hours_of_data=8760, column_separator="Comma",
             interpolate_to_timestep="No", adjust_schedule_for_daylight_savings="No")
@@ -502,7 +512,7 @@ def build(weather="cwec", p=PARAMS, period=None, sched="sched_8760.csv"):
             baseboard_heating_type="None")
     add("HVACTemplate:System:Unitary", "Furnace AC", system_availability_schedule_name="AlwaysOn",
         control_zone_or_thermostat_location_name="Floor1", supply_fan_maximum_flow_rate=p["supply_flow_m3s"],
-        supply_fan_operating_mode_schedule_name="FanCycling", supply_fan_total_efficiency=p["fan_eff"],
+        supply_fan_operating_mode_schedule_name="Fan Mode" if p.get("fan_mode", "cycling") == "schedule" else "FanCycling", supply_fan_total_efficiency=p["fan_eff"],
         supply_fan_delta_pressure=p["fan_dp_Pa"], supply_fan_motor_efficiency=0.85,
         supply_fan_motor_in_air_stream_fraction=1.0, cooling_coil_type="SingleSpeedDX",
         cooling_coil_availability_schedule_name="AlwaysOn", cooling_design_supply_air_temperature=12.8,
@@ -510,7 +520,7 @@ def build(weather="cwec", p=PARAMS, period=None, sched="sched_8760.csv"):
         cooling_coil_gross_rated_sensible_heat_ratio=p["ac_shr"], cooling_coil_gross_rated_cop=p["ac_cop_gross"],
         heating_coil_type="Gas", heating_coil_availability_schedule_name="AlwaysOn",
         heating_design_supply_air_temperature=45, heating_coil_capacity=round(p["furnace_output_W"], 1),
-        gas_heating_coil_efficiency=round(p["furnace_eff"], 4), gas_heating_coil_parasitic_electric_load=0,
+        gas_heating_coil_efficiency=round(p["furnace_eff"], 4), gas_heating_coil_parasitic_electric_load=p.get("furnace_parasitic_W", 0.0),
         maximum_outdoor_air_flow_rate=0.0, minimum_outdoor_air_flow_rate=0.0, economizer_type="NoEconomizer",
         supply_fan_placement="BlowThrough", night_cycle_control="StayOff", heat_recovery_type="None",
         dehumidification_control_type="None", humidifier_type="None", return_fan="No")
