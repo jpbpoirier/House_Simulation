@@ -215,7 +215,7 @@ def main():
             {"label": "Plug loads", "value": f"mean by weekday/weekend and hour, {span[0]:%Y-%m-%d} to {span[1]:%Y-%m-%d}"},
             {"label": "Prices", "value": "all-in: src/tariffs.py (Hydro Ottawa TOU from Nov 1 2026, Enbridge Rate 1 from Oct 1 2026); "
                                           f"gas marginal {100 * gas_rate:.1f} c/m3 incl. HST"},
-            {"label": "Model", "value": "EnergyPlus 26.2, model v0.4.1 (calibrated 2026-11-23)"}]
+            {"label": "Model", "value": "EnergyPlus 26.2, model v0.6 (calibrated 2026-11-23)"}]
     dash_dir = ROOT / "dashboard"; (dash_dir / "forecast_archive").mkdir(parents=True, exist_ok=True)
     payload = json.dumps({"rows": rows, "meta": meta})
     (dash_dir / "forecast.json").write_text(payload)
@@ -237,5 +237,5 @@ if __name__ == "__main__":
     except Exception as e:
         (ROOT / "dashboard").mkdir(parents=True, exist_ok=True)
         with open(ROOT / "dashboard" / "forecast_log.txt", "a") as f:
-            f.write(f"{dt.datetime.now():%Y-%m-%d %H:%M} FAILED: {e}\n")
+            f.write(f"{dt.datetime.now(dt.timezone(dt.timedelta(hours=-5))):%Y-%m-%d %H:%M} EST FAILED: {e}\n")
         raise

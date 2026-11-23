@@ -7,8 +7,8 @@ Dashboard: https://claude.ai/artifact/7qiLdwotc4fJCvyTDXCc14 · Model inputs, re
 ## Layout
 | Folder | Contents |
 |---|---|
-| `model/build_model.py` | epJSON generator; all calibrated knobs in `PARAMS` (model v0.4.1) |
-| `src/` | ingest, schedules, weather (EPW), run, results, calibration (`calib.py`, `screen.py`, `fit.py`), benchmarks (`cpm.py` change-point model, `rc_fit.py` night-time UA/C), forecast, tariffs, heat-pump sizing |
+| `model/build_model.py` | epJSON generator; all calibrated knobs in `PARAMS` (model v0.6) |
+| `src/` | ingest, schedules, weather (EPW), run, results, calibration (`calib.py`, `screen.py`, `fit.py`, `fit_mass.py`), benchmarks (`cpm.py` change-point model, `rc_fit.py` night-time UA/C), forecast, tariffs, heat-pump sizing |
 | `data/clean/` | cleaned ecobee (5-min), Hydro Ottawa (hourly/daily), Enbridge reads, water reads, Schedule:File inputs. Local standard time (EST) throughout |
 | `data/manual/` | manual gas meter readings |
 | `weather/` | ERA5/ECCC observations, actual-weather EPWs, CWEC 2020 |
