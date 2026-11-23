@@ -57,7 +57,10 @@ def fetch_forecast(today, offline=None):
         source = "OFFLINE TEST: ERA5 archive used as forecast"
     else:
         last_err = None
-        for model in ["gem_seamless", "best_match"]:
+        import time as _t
+        for attempt, model in enumerate(["gem_seamless", "gem_seamless", "best_match", "gem_seamless"]):
+            if attempt:
+                _t.sleep(20 * attempt)      # Open-Meteo returns HTTP 429 when busy; back off and retry
             try:
                 d = curl_json(f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&hourly={VARS}"
                               f"&models={model}&past_days={PAST}&forecast_days={HORIZON + 1}&timezone=GMT&wind_speed_unit=ms")
