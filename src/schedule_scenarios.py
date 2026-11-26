@@ -4,7 +4,7 @@ Comfort columns: home_hours_short = hours of the current program's Home periods 
 than 0.5 K below that scenario's setpoint (mostly recovery after setbacks; the model has no ecobee Smart
 Recovery, so real recoveries start earlier and save slightly less). Cost = heating gas x marginal all-in price.
 
-Each scenario changes forecast.COMFORT / PROGRAM / AWAY_HEAT_ECO, rebuilds a full-year schedule with the
+Each scenario changes forecast.COMFORT / PROGRAM / AWAY_HOME_FRAC, rebuilds a full-year schedule with the
 forecast's schedule logic (plug loads = latest 8 weeks, damper closed) and runs the CWEC year.
     python3 src/schedule_scenarios.py      -> runs/scenarios/summary.csv (+ printed table)
 """
@@ -26,6 +26,10 @@ WD, WE = BASE_PROGRAM["weekday"], BASE_PROGRAM["weekend"]
 
 SCEN = {
     "current": {},
+    "previous (to 2026-11-25)": {"comfort": {"Away": (20.0, 23.0)}, "eco": 0.45,
+                                 "program": {k: v for k, v in BASE_PROGRAM.items() if k != "wednesday"}},
+    "previous, eco 0.03": {"comfort": {"Away": (20.0, 23.0)}, "eco": 0.03,
+                          "program": {k: v for k, v in BASE_PROGRAM.items() if k != "wednesday"}},
     "away 18": {"comfort": {"Away": (18.0, 23.0)}},
     "sleep 17": {"comfort": {"Sleep": (17.0, 21.0)}},
     "home 20.5": {"comfort": {"Home": (20.5, 22.0), "Weekend Home": (20.5, 21.0)}},
@@ -40,9 +44,10 @@ SCEN = {
 def sched_for(sc, name):
     forecast.COMFORT = {**BASE_COMFORT, **sc.get("comfort", {})}
     forecast.PROGRAM = sc.get("program", BASE_PROGRAM)
-    forecast.AWAY_HEAT_ECO = sc.get("eco", 0.45)
+    forecast.AWAY_HOME_FRAC = sc.get("eco", 0.45)
     forecast.forecast_schedules(pd.Timestamp("2026-01-01"), pd.Timestamp("2026-12-31"))
-    fn = f"sched_scen_{name.replace(' ', '_').replace(':', '').replace('(', '').replace(')', '').replace('+', 'p')}.csv"
+    import re
+    fn = "sched_scen_" + re.sub(r"[^A-Za-z0-9.]+", "_", name).strip("_") + ".csv"   # E+ Schedule:File-safe name
     shutil.move(C / "sched_forecast.csv", C / fn)
     return fn
 

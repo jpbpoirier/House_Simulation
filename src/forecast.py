@@ -36,10 +36,14 @@ W, C, OUT = ROOT / "weather", ROOT / "data/clean", ROOT / "runs/forecast"
 OBSERVED = ["Kanata_2026_obs.epw", "Kanata_actual_2025-08_2026-07.epw"]
 
 # current ecobee program (local clock time). (start hh:mm, comfort) per day type; comfort -> (heat, cool) degC
-COMFORT = {"Away": (20.0, 23.0), "Home": (21.0, 22.0), "Sleep": (18.0, 21.0), "Weekend Home": (21.0, 21.0)}
+# 2026-11-25 (J-P): Away heat 20 -> 19 C; Wednesdays have no Away period (Home 06:30-19:00).
+COMFORT = {"Away": (19.0, 23.0), "Home": (21.0, 22.0), "Sleep": (18.0, 21.0), "Weekend Home": (21.0, 21.0)}
 PROGRAM = {"weekday": [("00:00", "Sleep"), ("06:30", "Home"), ("08:00", "Away"), ("15:30", "Home"), ("19:00", "Sleep")],
+           "wednesday": [("00:00", "Sleep"), ("06:30", "Home"), ("19:00", "Sleep")],
            "weekend": [("00:00", "Sleep"), ("08:00", "Weekend Home"), ("19:00", "Sleep")]}
-AWAY_HEAT_ECO = 0.45       # eco+ Smart Home kept Away at 21 instead of 20 ~45% of the time (calibration year)
+# Share of weekday Away hours (heat mode) held at the Home setpoint by eco+ Smart Home/Away. Winter 2025-26:
+# Mon/Tue/Thu 24-29 %, Wed 68 %, Fri 71 %. Oct 1 - Nov 25 2026: 0-6 % on all weekdays -> use the recent value.
+AWAY_HOME_FRAC = 0.03
 
 
 def curl_json(url):
@@ -84,14 +88,15 @@ def fetch_forecast(today, offline=None):
 def program_setpoints(ts_lst):
     """Heating/cooling setpoint for the hour starting at ts_lst (EST), averaged over the hour (half-hour edges)."""
     loc = pd.Timestamp(ts_lst).tz_localize("Etc/GMT+5").tz_convert("America/Toronto").tz_localize(None)
-    prog = PROGRAM["weekend" if loc.weekday() >= 5 else "weekday"]
+    wd = loc.weekday()
+    prog = PROGRAM["weekend" if wd >= 5 else ("wednesday" if wd == 2 and "wednesday" in PROGRAM else "weekday")]
     hs, cs = [], []
     for minute in (0, 30):
         m = loc.hour * 60 + minute
         name = [c for start, c in prog if int(start[:2]) * 60 + int(start[3:]) <= m][-1]
         h, c = COMFORT[name]
         if name == "Away":
-            h += AWAY_HEAT_ECO
+            h += AWAY_HOME_FRAC * (COMFORT["Home"][0] - h)
         hs.append(h); cs.append(c)
     heat, cool = np.mean(hs), np.mean(cs)
     mo = loc.month
@@ -211,7 +216,7 @@ def main():
             {"label": "Issued", "value": issued},
             {"label": "Weather", "value": source},
             {"label": "Weather file hours", "value": json.dumps(origin)},
-            {"label": "Thermostat", "value": "current ecobee program; Away heat +%.2f K for eco+ Smart Home" % AWAY_HEAT_ECO},
+            {"label": "Thermostat", "value": "current ecobee program (Away 19 C, no Away on Wednesdays); Away hours %.0f%% at Home for eco+ Smart Home" % (100 * AWAY_HOME_FRAC)},
             {"label": "Plug loads", "value": f"mean by weekday/weekend and hour, {span[0]:%Y-%m-%d} to {span[1]:%Y-%m-%d}"},
             {"label": "Prices", "value": "all-in: src/tariffs.py (Hydro Ottawa TOU from Nov 1 2026, Enbridge Rate 1 from Oct 1 2026); "
                                           f"gas marginal {100 * gas_rate:.1f} c/m3 incl. HST"},
