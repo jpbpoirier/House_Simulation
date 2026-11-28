@@ -8,3 +8,4 @@
 2026-11-26 06:04 EST: next 10 days gas 42 m3, elec 118 kWh, cost $54.26 (4 s)
 2026-11-27 06:06 EST FAILED: forecast fetch failed: curl: (22) The requested URL returned error: 429
 2026-11-27 06:08 EST: next 10 days gas 43 m3, elec 119 kWh, cost $54.16 (5 s)
+2026-11-28 06:04 EST: next 10 days gas 43 m3, elec 119 kWh, cost $54.08 (4 s)
